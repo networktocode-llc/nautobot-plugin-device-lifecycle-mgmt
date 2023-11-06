@@ -3,7 +3,7 @@ from django.db import migrations, models
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("extras", "0062_collect_roles_from_related_apps_roles"),
+        ("extras", "0061_role_and_alter_status"),
         ("nautobot_device_lifecycle_mgmt", "0004_validated_software_m2m"),
     ]
 
