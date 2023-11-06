@@ -2,8 +2,10 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
+    run_before = [
+        ("dcim", "0028_alter_device_and_rack_role_add_new_role"),
+    ]
     dependencies = [
-        ("dcim", "0027_alter_interface_mac_address"),
         ("nautobot_device_lifecycle_mgmt", "0004_validated_software_m2m"),
     ]
 
