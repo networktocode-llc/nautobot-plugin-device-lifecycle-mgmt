@@ -3,7 +3,7 @@ from django.db import migrations, models
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("extras", "0061_role_and_alter_status"),
+        ("dcim", "0027_alter_interface_mac_address"),
         ("nautobot_device_lifecycle_mgmt", "0004_validated_software_m2m"),
     ]
 
