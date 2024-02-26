@@ -228,6 +228,7 @@ class CVELCMViewTest(ViewTestCases.PrimaryObjectViewTestCase):
     form_data = {
         "name": "Test 1",
         "published_date": datetime.date(2022, 1, 1),
+        "last_modified_date": datetime.date(2022, 2, 1),
         "link": "https://www.cvedetails.com/cve/CVE-2022-0001/",
     }
 

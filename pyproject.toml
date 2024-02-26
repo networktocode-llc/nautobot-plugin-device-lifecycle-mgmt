@@ -43,6 +43,7 @@ ipython = "*"
 pylint = "*"
 pylint-django = "*"
 pylint-nautobot = "*"
+netutils = { git = "https://github.com/bminnix/netutils.git", branch = "feature/platform_mapper" }
 ruff = "*"
 yamllint = "*"
 toml = "*"

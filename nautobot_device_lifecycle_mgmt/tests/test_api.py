@@ -405,6 +405,7 @@ class CVELCMAPITest(APIViewTestCases.APIViewTestCase):
         "link",
         "name",
         "published_date",
+        "last_modified_date",
         "severity",
         "status",
         "url",
@@ -421,18 +422,21 @@ class CVELCMAPITest(APIViewTestCases.APIViewTestCase):
             {
                 "name": "CVE-2021-40128",
                 "published_date": datetime.date(2021, 11, 4),
+                "last_modified_date": datetime.date(2021, 12, 4),
                 "link": "https://www.cvedetails.com/cve/CVE-2021-40128/",
                 "affected_softwares": [software.pk for software in softwares],
             },
             {
                 "name": "CVE-2021-40126",
                 "published_date": datetime.date(2021, 11, 4),
+                "last_modified_date": datetime.date(2022, 2, 4),
                 "link": "https://www.cvedetails.com/cve/CVE-2021-40126/",
                 "affected_softwares": [software.pk for software in softwares],
             },
             {
                 "name": "CVE-2021-40125",
                 "published_date": datetime.date(2021, 10, 27),
+                "last_modified_date": datetime.date(2022, 1, 4),
                 "link": "https://www.cvedetails.com/cve/CVE-2021-40125/",
                 "affected_softwares": [software.pk for software in softwares],
             },
@@ -441,16 +445,19 @@ class CVELCMAPITest(APIViewTestCases.APIViewTestCase):
         CVELCM.objects.create(
             name="CVE-2021-1391",
             published_date="2021-03-24",
+            last_modified_date="2021-12-04",
             link="https://www.cvedetails.com/cve/CVE-2021-1391/",
         )
         CVELCM.objects.create(
             name="CVE-2021-44228",
             published_date="2021-12-10",
+            last_modified_date="2021-12-14",
             link="https://www.cvedetails.com/cve/CVE-2021-44228/",
         )
         CVELCM.objects.create(
             name="CVE-2020-27134",
             published_date="2020-12-11",
+            last_modified_date="2021-01-04",
             link="https://www.cvedetails.com/cve/CVE-2020-27134/",
         )
 
