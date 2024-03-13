@@ -126,6 +126,7 @@ class SoftwareLCMTable(BaseTable):
             "release_date",
             "end_of_support",
             "long_term_support",
+            "corresponding_cves",
             "pre_release",
             "actions",
         )
@@ -183,6 +184,31 @@ class SoftwareImageLCMTable(BaseTable):
             "default_image",
             "download_url",
             "actions",
+        )
+
+
+class RelatedCVEsLCMTable(BaseTable):
+    """Table for RelatedCVEsLCM."""
+
+    pk = ToggleColumn()
+    name = tables.LinkColumn(
+        "plugins:nautobot_device_lifecycle_mgmt:cvelcm",
+        text=lambda record: record,
+        args=[A("pk")],
+        orderable=False,
+    )
+    actions = ButtonsColumn(CVELCM, buttons=("edit", "delete"))
+
+    class Meta(BaseTable.Meta):
+        """Meta attributes."""
+
+        model = CVELCM
+        fields = (
+            "name",
+            "last_modified_date",
+            "severity",
+            "cvss",
+            "link",
         )
 
 

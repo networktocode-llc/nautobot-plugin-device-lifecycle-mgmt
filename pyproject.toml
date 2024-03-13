@@ -31,6 +31,7 @@ python = ">=3.8,<3.12"
 pycountry = "^22.3.5"
 matplotlib = "^3.3.4"
 nautobot = "^2.0.0"
+netutils = { git = "https://github.com/bminnix/netutils.git", branch = "feature/platform_mapper" }
 
 [tool.poetry.group.dev.dependencies]
 bandit = "*"
@@ -43,7 +44,6 @@ ipython = "*"
 pylint = "*"
 pylint-django = "*"
 pylint-nautobot = "*"
-netutils = { git = "https://github.com/bminnix/netutils.git", branch = "feature/platform_mapper" }
 ruff = "*"
 yamllint = "*"
 toml = "*"

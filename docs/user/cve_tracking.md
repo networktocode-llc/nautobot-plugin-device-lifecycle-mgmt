@@ -28,13 +28,13 @@ When creating a CVE object, the following fields are available. Fields in **bold
 
 ### Software Association
 
-As stated previously, you can associate a CVE to one or many [Software objects](./software_lifecycle.md#software-objects). These relationships will present themselves as breadcrumb links on each item's detail view.
+As stated previously, you can associate a CVE to one or many [Software objects](./software_lifecycle.md#software-objects). These relationships will present themselves as breadcrumb links on the CVE item's detail view, and as the "Related CVEs" tab on the Software item's detail view.
 
 Example of a breadcrumb link on a CVE item's view:
 
 ![](../images/lcm_cve_breadcrumb.png)
 
-Example of a breadcrumb link on a Software item's view:
+Example of the "Related CVEs" tab on a Software item's view:
 
 ![](../images/lcm_software_breadcrumb.png)
 
@@ -60,3 +60,37 @@ After a Vulnerability object has been generated, the CVE, Software, Device and I
     In addition to these standard fields, you can also add one or more [Custom Fields](https://docs.nautobot.com/projects/core/en/stable/models/extras/customfield/) to the model.
 
 As was stated previously, running the ``Generate Vulnerabilities`` Job will not modify (or delete) any existing Vulnerability objects - **even if the associations that existed previously no longer exist**. You do have the ability to delete one or more Vulnerability objects via the GUI or API. In addition to manually removing a Vulnerability, if any CVE, Software, Device or Inventory Item objects are removed, any Vulnerability objects that reference the deleted items will also be removed automatically.
+
+## Automated CVE Discovery via NIST API 2.0
+
+### API Key
+In order to utilize the NIST CVE DB for automatic software CVE discovery, you will need to obtain a NIST API Key [here]('https://nvd.nist.gov/developers/request-an-api-key').
+
+Once received, this key will need to be added to your `creds.env`:
+```
+NIST_API_KEY=your-key-will-go-here
+```
+
+### Run Job
+Automated discovery is used by running the ``NIST - Software CVE Search`` Job.
+
+To run this job, use the "Jobs" menu dropdown and navigate to the **CVE Tracking** section. The jobs will appear here and all you will need to do is click the play button.[^1]
+
+![](../images/lcm_cve_nist_job.png)
+
+The job output should indicate the softwares checked and the amount of CVEs received for that software, as well as the amount of CVEs created.  These will not always be the same.  New CVE will be created for software with existing CVE, also software will share CVEs.
+
+![](../images/lcm_cve_nist_job_log.png)
+
+[^1] Warning: If play button is grayed out. You will need to enable the job by clicking on edit button in the row and navigate to "Job" portion and click on "Enable"
+
+### Additional Notes:
+The device platform name plays part in the success of the lookup.  Please see below for known values outside of an intuitive pattern:
+
+| Platform Name | Required Name Value |
+| -- | -- |
+| IOS XE | IOS_XE |
+| IOS XR | IOS_XR |
+| NXOS | NX-OS |
+
+If the platform name is not in the above table there may be no need to adjust, however if you do not receive results for a platform, it is likely the name does not show up in NIST as provided.  You may use the [NIST CPE Search Tool]('https://nvd.nist.gov/products/cpe/search') and attempt to find your software and rename the platform as necessary.

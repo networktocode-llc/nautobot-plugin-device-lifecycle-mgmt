@@ -17,6 +17,9 @@
     <li role="presentation"{% if active_tab == 'software-images' %} class="active"{% endif %}>
         <a href="{% url 'plugins:nautobot_device_lifecycle_mgmt:software_software_images' pk=object.pk %}">Software Images <span class="badge">{{ object.get_software_images.count }}</span></a>
     </li>
+    <li role="presentation"{% if active_tab == 'related-cves' %} class="active"{% endif %}>
+        <a href="{% url 'plugins:nautobot_device_lifecycle_mgmt:software_corresponding_cves' pk=object.pk %}">Related CVEs <span class="badge">{{ object.corresponding_cves.count }}</span></a>
+    </li>
 {% endblock %}
 
 {% block content_left_page %}

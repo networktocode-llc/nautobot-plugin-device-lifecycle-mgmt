@@ -204,6 +204,7 @@ class SoftwareLCMFilterForm(NautobotFilterForm):
     device_platform = forms.ModelMultipleChoiceField(
         required=False, queryset=Platform.objects.all(), to_field_name="name"
     )
+    corresponding_cves = DynamicModelMultipleChoiceField(queryset=CVELCM.objects.all(), required=False)
     release_date_before = forms.DateField(label="Release Date Before", required=False, widget=DatePicker())
     release_date_after = forms.DateField(label="Release Date After", required=False, widget=DatePicker())
     end_of_support_before = forms.DateField(label="End of Software Support Before", required=False, widget=DatePicker())

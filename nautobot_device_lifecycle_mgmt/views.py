@@ -35,6 +35,7 @@ from nautobot_device_lifecycle_mgmt.tables import (
     InventoryItemSoftwareValidationResultListTable,
     InventoryItemSoftwareValidationResultTable,
     SoftwareImageLCMTable,
+    CVELCMTable,
 )
 from nautobot_device_lifecycle_mgmt.utils import count_related_m2m
 
@@ -74,7 +75,34 @@ class SoftwareSoftwareImagesLCMView(generic.ObjectView):
             "softwareimages_table": softwareimages_table,
             "active_tab": "software-images",
         }
+    
 
+class RelatedCVEsLCMView(generic.ObjectView):
+    """Related CVEs tab for Software view."""
+
+    queryset = SoftwareLCM.objects.all()
+    template_name = "nautobot_device_lifecycle_mgmt/softwarelcm_related_cves.html"
+
+    def get_extra_context(self, request, instance):
+        """Adds Relative CVEs table."""
+        relatedcves = (
+            instance.corresponding_cves.annotate(related_cves_count=count_related_m2m(SoftwareLCM, "corresponding_cves"))
+            .restrict(request.user, "view")
+        )
+
+        relatedcves_table = CVELCMTable(data=relatedcves, user=request.user, orderable=False)
+
+        paginate = {
+            "paginator_class": EnhancedPaginator,
+            "per_page": get_paginate_count(request),
+        }
+        RequestConfig(request, paginate).configure(relatedcves_table)
+
+        return {
+            "relatedcves_table": relatedcves_table,
+            "active_tab": "related-cves",
+        }
+    
 
 class ReportOverviewHelper(ContentTypePermissionRequiredMixin, generic.View):
     """Customized overview view for reports aggregation and filterset."""

@@ -24,6 +24,11 @@ urlpatterns += [
         name="software_software_images",
     ),
     path(
+        "software/<uuid:pk>/corresponding_cves/",
+        views.RelatedCVEsLCMView.as_view(),
+        name="software_corresponding_cves",
+    ),
+    path(
         "validated-software-device-report/",
         views.ValidatedSoftwareDeviceReportView.as_view(),
         name="validatedsoftware_device_report",

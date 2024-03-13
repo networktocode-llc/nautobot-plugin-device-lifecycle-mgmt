@@ -86,7 +86,7 @@ class GenerateVulnerabilities(Job):
 class NistCveSyncSoftware(Job):
     """Checks all software in the DLC Plugin for NIST recorded vulnerabilities."""
 
-    name = "Find current NIST CVE for Software in Database"
+    name = "NIST - Software CVE Search"
     description = "Searches the NIST DBs for CVEs related to software"
     read_only = False
 
@@ -155,33 +155,24 @@ class NistCveSyncSoftware(Job):
         )
         self.session.close()
 
+
     def associate_software_to_cve(self, software_id, cve_id):
         """A function to associate software to a CVE."""
         cve = CVELCM.objects.get(id=cve_id)
         software = SoftwareLCM.objects.get(id=software_id)
-        platform = Platform.objects.get(id=software.device_platform.id)
 
         try:
-            RelationshipAssociation.objects.get(source_id=software_id, destination_id=cve_id)
             cve.affected_softwares.add(software)
-            print("SHOULD HAVE ADDED AFFECTEDD SOFTWARE IF IT DOESN'T EXIST")
 
-        except RelationshipAssociation.DoesNotExist:
-            r_type = Relationship.objects.get(key="soft_cve")
-            RelationshipAssociation.objects.get_or_create(
-                relationship_id=r_type.id,
-                source_type_id=r_type.source_type_id,
-                source_id=software_id,
-                destination_type_id=r_type.destination_type_id,
-                destination_id=cve_id,
-            )
-            self.logger.info(
-                f"""Associated {cve.name} to {platform.name} - {software.version}.""", 
+        except Exception as err:
+            self.logger.error(
+                f"Unable to create association between CVE and Software Version.  ERROR: {err}",
                 extra={
                     "object": cve, 
                     "grouping": "CVE Association"
                 }    
             )
+
 
     def create_cpe_software_search_urls(self, vendor: str, platform: str, version: str) -> list:
         """Uses netutils.platform_mapper to construct proper search URLs.
@@ -202,6 +193,8 @@ class NistCveSyncSoftware(Job):
 
     def create_dlc_cves(self, cpe_cves: dict) -> None:
         """Create the list of needed items and insert into to DLC CVEs."""
+
+        created_count = 0
 
         for cve, info in cpe_cves.items():
             try:
@@ -225,9 +218,9 @@ class NistCveSyncSoftware(Job):
             )
 
             if created:
-                self.logger.info(f"Created CVE.", extra={"object": cve, "grouping": "CVE Creation"})
-            else:
-                self.logger.info(f"Checking for Updates.", extra={"object": cve, "grouping": "CVE Updates"})
+                created_count += 1
+
+        self.logger.info(f"Created { created_count } CVEs.", extra={"grouping": "CVE Creation"})
 
 
     def get_cve_info(self, cpe_software_search_urls: list, software_id=None) -> dict:
@@ -255,16 +248,16 @@ class NistCveSyncSoftware(Job):
                         cve_name = cve['id']
                         if cve_name.startswith("CVE"):
                             if cve_name not in dlc_cves:
-                                self.logger.info(
-                                    f"Preparing CVE for creation.", 
-                                    extra={
-                                        "object": cve_name, 
-                                        "grouping": "CVE Creation"
-                                    }
-                                )
                                 all_cve_info['new'].update({cve_name: self.prep_cve_for_dlc(cve)})
                             else:
                                 all_cve_info['existing'].update({cve_name: self.prep_cve_for_dlc(cve)})
+                    self.logger.info(
+                        f"Prepared { len(all_cve_info['new']) } CVE for creation.", 
+                        extra={
+                            "object": SoftwareLCM.objects.get(id=software_id), 
+                            "grouping": "CVE Creation"
+                        }
+                    )
 
         return all_cve_info
 
