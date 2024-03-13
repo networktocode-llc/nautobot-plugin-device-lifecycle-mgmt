@@ -7,7 +7,10 @@ import json
 from datetime import datetime, date
 from time import sleep
 
+from urllib3.util import Retry
 import requests
+from requests import Session
+from requests.adapters import HTTPAdapter
 
 from django.core.exceptions import ValidationError
 from nautobot.extras.jobs import Job, StringVar
@@ -51,7 +54,7 @@ class GenerateVulnerabilities(Job):
     def run(self, published_after, debug=False):  # pylint: disable=too-many-locals, arguments-differ
         """Check if software assigned to each device is valid. If no software is assigned return warning message."""
         # Although the default is set on the class attribute for the UI, it doesn't default for the API
-        published_after = published_after if published_after is not None else "1970-01-01"
+        published_after = published_after or "1970-01-01"
         cves = CVELCM.objects.filter(published_date__gte=datetime.fromisoformat(published_after))
         count_before = VulnerabilityLCM.objects.count()
 
@@ -97,47 +100,74 @@ class NistCveSyncSoftware(Job):
         super().__init__()
         self.nist_api_key = os.getenv("NIST_API_KEY")
         self.sleep_timer = 0.75
+        self.headers = {
+            "ContentType": "application/json", 
+            "apiKey": self.nist_api_key
+        }
+        
+        self.soft_time_limit = 900
+
+        # Set session attributes for retries
+        self.session = Session()
+        retries = Retry(
+            total=3,
+            backoff_factor=10,
+            status_forcelist=[502, 503, 504],
+            allowed_methods={'GET'},
+        )
+        self.session.mount('https://', HTTPAdapter(max_retries=retries))
 
     def run(self):
         """Check all software in DLC against NIST database and associate registered CVEs.  Update when necessary."""
         cve_counter = 0
+        
         for software in SoftwareLCM.objects.all():
-
             manufacturer = str(software.device_platform.manufacturer).lower()
-            platform = str(software.device_platform.name).lower() #.split(" ", 1)[1].lower().replace(" ", "_")
+            platform = str(software.device_platform.name).lower()
             version = str(software.version)
 
             cpe_software_search_urls = self.create_cpe_software_search_urls(manufacturer, platform, version)
-            return cpe_software_search_urls
-            # self.log_info(message=f"Getting CVE information for {str(software.device_platform.name)} {version}")
-            software_cve_info = self.get_cve_info(cpe_software_search_urls, software.id)
 
+            self.logger.info(
+                f"""Gathering CVE Information for Version: {version}""", 
+                extra={
+                    "object": software.device_platform, 
+                    "grouping": "CVE Information"
+                }
+            )
             
-            cve_counter += len(software_cve_info)
-            self.create_dlc_cves(software.id, software_cve_info)
+            software_cve_info = self.get_cve_info(cpe_software_search_urls, software.id)
+            all_software_cve_info = {**software_cve_info['new'], **software_cve_info['existing']}
 
-            # Job defined timer
-            sleep(self.sleep_timer)
+            cve_counter += len(software_cve_info['new'])
+            self.create_dlc_cves(software_cve_info['new'])
+        
+            for software_cve, cve_info in all_software_cve_info.items():
+                matching_dlc_cve = CVELCM.objects.get(name=software_cve)
+                self.associate_software_to_cve(software.id, matching_dlc_cve.id)
+                if str(cve_info['modified_date'][0:10]) != str(matching_dlc_cve.last_modified_date):
+                    self.update_cve(matching_dlc_cve, cve_info)
+                    continue
 
-        # self.log_success(
-        #     message=f"""Performed discovery on all software meeting naming standards.  Added {cve_counter} CVE."""
-        # )
-
-        # Give API an additional break before sending update requests
-        sleep(5)
-        self.update_cves()
+        self.logger.info(
+            f"""Performed discovery on all software. Created {cve_counter} CVE.""",
+            extra={"grouping": "CVE Creation"}
+        )
+        self.session.close()
 
     def associate_software_to_cve(self, software_id, cve_id):
         """A function to associate software to a CVE."""
         cve = CVELCM.objects.get(id=cve_id)
         software = SoftwareLCM.objects.get(id=software_id)
-        platform = Platform.objects.get(id=software.device_platform_id)
+        platform = Platform.objects.get(id=software.device_platform.id)
 
         try:
-            return RelationshipAssociation.objects.get(source_id=software_id, destination_id=cve_id)
+            RelationshipAssociation.objects.get(source_id=software_id, destination_id=cve_id)
+            cve.affected_softwares.add(software)
+            print("SHOULD HAVE ADDED AFFECTEDD SOFTWARE IF IT DOESN'T EXIST")
 
         except RelationshipAssociation.DoesNotExist:
-            r_type = Relationship.objects.get(slug="soft_cve")
+            r_type = Relationship.objects.get(key="soft_cve")
             RelationshipAssociation.objects.get_or_create(
                 relationship_id=r_type.id,
                 source_type_id=r_type.source_type_id,
@@ -145,17 +175,34 @@ class NistCveSyncSoftware(Job):
                 destination_type_id=r_type.destination_type_id,
                 destination_id=cve_id,
             )
-            return self.log_info(message=f"""Associated {cve.name} to {platform.name} - {software.version}.""")
+            self.logger.info(
+                f"""Associated {cve.name} to {platform.name} - {software.version}.""", 
+                extra={
+                    "object": cve, 
+                    "grouping": "CVE Association"
+                }    
+            )
 
-    def create_cpe_software_search_urls(self, vendor: str, platform: str, version: str) -> str:
-        """Convert the data into the url for a cpe search against the NIST DB."""
+    def create_cpe_software_search_urls(self, vendor: str, platform: str, version: str) -> list:
+        """Uses netutils.platform_mapper to construct proper search URLs.
+
+        Args:
+            vendor (str): Software Vendor (Examples: Cisco, Juniper, Arista)
+            platform (str): Software Platform (Examples: IOS, JunOS, EOS)
+            version (str): Software Version
+
+        Returns:
+            list: List of URLS that associated CVEs may be found
+        """
         platform_object = object_builder(vendor, platform, version)
-        cpe_urls = platform_object.get_nist_urls(self.nist_api_key)
+        cpe_urls = platform_object.get_nist_urls()
 
         return  cpe_urls
 
-    def create_dlc_cves(self, software_id: str, cpe_cves: dict) -> None:
-        """Create the list of items that will need to be inserted to DLC CVEs."""
+
+    def create_dlc_cves(self, cpe_cves: dict) -> None:
+        """Create the list of needed items and insert into to DLC CVEs."""
+
         for cve, info in cpe_cves.items():
             try:
                 description = (
@@ -178,93 +225,119 @@ class NistCveSyncSoftware(Job):
             )
 
             if created:
-                self.log_info(message=f"""Created {cve}.""")
+                self.logger.info(f"Created CVE.", extra={"object": cve, "grouping": "CVE Creation"})
+            else:
+                self.logger.info(f"Checking for Updates.", extra={"object": cve, "grouping": "CVE Updates"})
 
-            self.associate_software_to_cve(software_id, create_cves.id)
 
     def get_cve_info(self, cpe_software_search_urls: list, software_id=None) -> dict:
         """Search NIST for software and related CVEs."""
-        all_cve_info = {}
-        for cpe_software_search_url in cpe_software_search_urls:
-            try:
-                result = requests.get(cpe_software_search_url, headers={"Content-Type": "application/json", "apiKey": self.nist_api_key})
-                result.raise_for_status()
-            except requests.exceptions.HTTPError as err:
-                self.logger(message=f"WARNING: {err}.")
+        all_cve_info = {
+            'new': {},
+            'existing': {}
+        }
+        for cpe_software_search_url in cpe_software_search_urls:                    
+            result = self.query_api(cpe_software_search_url)
 
-            
-            cpe_info = result.json()
-
-
-            if len(cpe_info["result"]["cpes"]) > 0:
-                cve_list = cpe_info["result"]["cpes"][0].get("vulnerabilities", [])
-                base_url = "https://services.nvd.nist.gov/rest/json/cves/2.0/"
-
+            if result["totalResults"] > 0:
+                self.logger.info(
+                    f"""Received {result['totalResults']} results.""", 
+                    extra={
+                        "object": SoftwareLCM.objects.get(id=software_id), 
+                        "grouping": "CVE Creation"
+                    }
+                )
+                cve_list = [cve['cve'] for cve in result['vulnerabilities']]
                 dlc_cves = [cve.name for cve in CVELCM.objects.all()]
 
                 if cve_list:
                     for cve in cve_list:
-                        if cve not in dlc_cves and cve.startswith("CVE"):
-                            all_cve_info[cve] = self.prep_cve_for_dlc(base_url + cve)
-                            # API relax timer
-                            sleep(self.sleep_timer)
-                        else:
-                            existing_cve = CVELCM.objects.get(name=cve)
-                            self.associate_software_to_cve(software_id, existing_cve.id)
+                        cve_name = cve['id']
+                        if cve_name.startswith("CVE"):
+                            if cve_name not in dlc_cves:
+                                self.logger.info(
+                                    f"Preparing CVE for creation.", 
+                                    extra={
+                                        "object": cve_name, 
+                                        "grouping": "CVE Creation"
+                                    }
+                                )
+                                all_cve_info['new'].update({cve_name: self.prep_cve_for_dlc(cve)})
+                            else:
+                                all_cve_info['existing'].update({cve_name: self.prep_cve_for_dlc(cve)})
 
         return all_cve_info
 
-    def prep_cve_for_dlc(self, url):  # pylint: disable=too-many-locals
-        """Converts CVE info into DLC Model compatibility."""
-        cve_name = url.split("/")[-1]
-        cve_search_url = f"{url}?apiKey={self.nist_api_key}"
+
+    def query_api(self, url):
         try:
-            result = requests.get(cve_search_url)
+            result = self.session.get(url, headers=self.headers)
             result.raise_for_status()
         except requests.exceptions.HTTPError as err:
-            retry_sleep_timer = 3
-            self.log_warning(message=f"WARNING: {err}. Will retry in {str(retry_sleep_timer)} seconds.")
-            sleep(retry_sleep_timer)
-            try:
-                result = requests.get(cve_search_url)
-                result.raise_for_status()
-            except requests.exceptions.HTTPError as retry_err:
-                return self.log_warning(message=f"ERROR: {retry_err}. No data.")
-        cve = result.json()
+            code = err.response.status_code
+            self.logger.error(f"The NIST Service is currently unavailable. Status Code: {code}. Try running the job again later.")
+    
+        return result.json()
 
-        if cve.get("message"):
-            return AttributeError
+    @staticmethod
+    def convert_v2_base_score_to_severity(score: float) -> str:
+        if (score >= 0.0) and (score <= 3.9):
+            return "LOW"
+        elif (score >= 4.0) and (score <= 6.9):
+            return "MEDIUM"
+        elif (score >= 7.0) and (score <= 10):
+            return "HIGH"
+        else:
+            return "UNDEFINED"
+        
+    def prep_cve_for_dlc(self, cve_json):  # pylint: disable=too-many-locals
+        """Converts CVE info into DLC Model compatibility."""
+        
+        cve = cve_json
 
-        cve_base = cve["result"]["CVE_Items"][0]
-        cve_description = cve_base["cve"]["description"]["description_data"][0]["value"]
-        cve_published_date = cve_base.get("publishedDate")
-        cve_modified_date = cve_base.get("lastModifiedDate")
-        cve_impact = cve_base.get("impact")
+        # cve_base = cve["vulnerabilities"][0]['cve']
+        cve_base = cve
+        cve_name = cve_base['id']
+        for desc in cve_base['descriptions']:
+            if desc['lang'] == 'en':
+                cve_description = desc['value']
+        cve_published_date = cve_base.get("published")
+        cve_modified_date = cve_base.get("lastModified")
+        cve_impact = cve_base['metrics']
 
         # Determine URL
-        if len(cve["result"]["CVE_Items"][0]["cve"]["references"]["reference_data"]) > 0:
-            cve_url = cve["result"]["CVE_Items"][0]["cve"]["references"]["reference_data"][0].get(
+        if len(cve_base["references"]) > 0:
+            cve_url = cve_base["references"][0].get(
                 "url", f"https://www.cvedetails.com/cve/{cve_name}/"
             )
         else:
             cve_url = f"https://www.cvedetails.com/cve/{cve_name}/"
 
         # Determine if V3 exists and set all params based on found version info
-        if cve_impact.get("baseMetricV3") and cve_impact.get("baseMetricV2"):
-            cvss_base_score = cve_impact["baseMetricV3"]["cvssV3"]["baseScore"]
-            cvss_severity = cve_impact["baseMetricV3"]["cvssV3"]["baseSeverity"]
-            cvssv2_score = cve_impact["baseMetricV2"]["exploitabilityScore"]
-            cvssv3_score = cve_impact["baseMetricV3"]["exploitabilityScore"]
-        elif cve_impact.get("baseMetricV3") and not cve_impact.get("baseMetricV2"):
-            cvss_base_score = cve_impact["baseMetricV3"]["cvssV3"]["baseScore"]
-            cvss_severity = cve_impact["baseMetricV3"]["cvssV3"]["baseSeverity"]
-            cvssv2_score = None
-            cvssv3_score = cve_impact["baseMetricV3"]["exploitabilityScore"]
+        if cve_impact.get("cvssMetricV31"):
+            cvss_base_score = cve_impact["cvssMetricV31"][0]["cvssData"]["baseScore"]
+            cvss_severity = cve_impact["cvssMetricV31"][0]["cvssData"]["baseSeverity"]
+            if cve_impact.get("cvssMetricV2"):
+                cvssv2_score = cve_impact["cvssMetricV2"][0].get("exploitabilityScore", 10)
+            else:
+                cvssv2_score = 10
+            cvssv3_score = cve_impact["cvssMetricV31"][0].get("exploitabilityScore", 10)
+
+        elif cve_impact.get("cvssMetricV30"):
+            cvss_base_score = cve_impact["cvssMetricV30"][0]["cvssData"]["baseScore"]
+            cvss_severity = cve_impact["cvssMetricV30"][0]["cvssData"]["baseSeverity"]
+            if cve_impact.get("cvssMetricV2"):
+                cvssv2_score = cve_impact["cvssMetricV2"][0].get("exploitabilityScore", 10)
+            else:
+                cvssv2_score = 10
+            cvssv3_score = cve_impact["cvssMetricV30"][0].get("exploitabilityScore", 10)
+            
         else:
-            cvss_base_score = cve_impact["baseMetricV2"]["cvssV2"]["baseScore"]
-            cvss_severity = cve_impact["baseMetricV2"]["severity"]
-            cvssv2_score = cve_impact["baseMetricV2"]["exploitabilityScore"]
-            cvssv3_score = None
+            cvss_base_score = cve_impact["cvssMetricV2"][0]["cvssData"]["baseScore"]
+            cvss_severity = cve_impact["cvssMetricV2"][0]["baseSeverity"] or self.convert_v2_base_score_to_severity(cvss_base_score)
+            cvssv2_score = cve_impact["cvssMetricV2"][0].get("exploitabilityScore", 10)
+            cvssv3_score = 0
+
 
         all_cve_info = {
             "url": cve_url,
@@ -279,45 +352,45 @@ class NistCveSyncSoftware(Job):
 
         return all_cve_info
 
-    def update_cves(self) -> None:
-        """A method to ensure the CVE in DLC is the latest version."""
-        self.log_info(message="Checking for CVE Modifications")
-        base_url = "https://services.nvd.nist.gov/rest/json/cves/2.0/"
+    def update_cve(self, current_dlc_cve: CVELCM, updated_cve: dict) -> None:
+        """Determine if the last modified date from the latest info is newer than the existing info and update.
 
-        for cve in CVELCM.objects.all():
-            if re.search("^CVE", cve.name):
-                result = self.prep_cve_for_dlc(base_url + cve.name)
-                try:
-                    if str(result.get("modified_date")[0:10]) != str(cve.last_modified_date):
-                        try:
-                            cve.description = (
-                                f"{result['description'][0:251]}..."
-                                if len(result["description"]) > 255
-                                else result["description"]
-                            )
-                        except TypeError:
-                            cve.description = "No Description Provided from NIST DB."
-                        cve.last_modified_date = f"{result.get('modified_date')[0:10]}"
-                        cve.link = result["url"]
-                        cve.cvss = result["cvss_base_score"]
-                        cve.severity = result["cvss_severity"]
-                        cve.cvss_v2 = result["cvssv2_score"]
-                        cve.cvss_v3 = result["cvssv3_score"]
-                        cve.comments = "ENTRY UPDATED BY NAUTOBOT NIST JOB"
+        Args:
+            current_dlc_cve (dict): Dictionary from the current DLM CVE DB.
+            updated_cve (dict): Dictionary from the latest software pull for CVE.
+        """
 
-                        try:
-                            cve.validated_save()
-                            self.log_info(message=f"""{cve.name} was modified.""")
+        try:
+            current_dlc_cve.description = (
+                f"{updated_cve['description'][0:251]}..."
+                if len(updated_cve["description"]) > 255
+                else updated_cve["description"]
+            )
+        except TypeError:
+            current_dlc_cve.description = "No Description Provided from NIST DB."
+        current_dlc_cve.last_modified_date = f"{updated_cve['modified_date'][0:10]}"
+        current_dlc_cve.link = updated_cve["url"]
+        current_dlc_cve.cvss = updated_cve["cvss_base_score"]
+        current_dlc_cve.severity = updated_cve["cvss_severity"].title()
+        current_dlc_cve.cvss_v2 = updated_cve["cvssv2_score"]
+        current_dlc_cve.cvss_v3 = updated_cve["cvssv3_score"]
+        current_dlc_cve.comments = "ENTRY UPDATED BY NAUTOBOT NIST JOB"
 
-                        except ValidationError:
-                            self.log_info(message=f"""Unable to update {cve.name}.""")
+        try:
+            current_dlc_cve.validated_save()
+            self.logger.info(
+                f"Modified CVE.", 
+                extra={
+                    "object": current_dlc_cve, 
+                    "grouping": "CVE Updates"
+                }
+            )
 
-                except AttributeError:
-                    self.log_info(
-                        message=f"CVE {cve.name} Does not exist in NIST Database.  Cannot be updated by NIST."
-                    )
-            # API relax timer
-            sleep(self.sleep_timer)
-
-        self.log_success(message="All CVE's requiring modifications have been updated.")
-
+        except ValidationError as err:
+            self.logger.error(
+                f"""Unable to update CVE. ERROR: {err}""", 
+                extra={
+                    "object": current_dlc_cve, 
+                    "grouping": "CVE Updates"
+                }
+            ) 
