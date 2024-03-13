@@ -1,4 +1,5 @@
 """Forms implementation for the Lifecycle Management app."""
+
 import logging
 
 from django import forms
@@ -953,7 +954,7 @@ class CVELCMFilterForm(NautobotFilterForm):
 
     last_modified_date_before = forms.DateField(label="Last Modified Date Before", required=False, widget=DatePicker())
     last_modified_date_after = forms.DateField(label="Last Modified Date After", required=False, widget=DatePicker())
-    
+
     cvss__gte = forms.FloatField(label="CVSS Score Above", required=False)
     cvss__lte = forms.FloatField(label="CVSS Score Below", required=False)
 

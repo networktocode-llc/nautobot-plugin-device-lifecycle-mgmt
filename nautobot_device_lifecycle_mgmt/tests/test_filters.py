@@ -614,7 +614,7 @@ class CVELCMTestCase(TestCase):
         """Test last_modified_date_before filter."""
         params = {"last_modified_date_before": "2021-01-01"}
         self.assertEqual(self.filterset(params, self.queryset).qs.count(), 0)
-    
+
     def test_last_modified_after(self):
         """Test last_modified_date_after filter."""
         params = {"last_modified_date_after": "2021-01-01"}

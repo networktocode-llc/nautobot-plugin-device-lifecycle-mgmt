@@ -6,13 +6,13 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('nautobot_device_lifecycle_mgmt', '0020_alter_created_tags'),
+        ("nautobot_device_lifecycle_mgmt", "0020_alter_created_tags"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='cvelcm',
-            name='last_modified_date',
+            model_name="cvelcm",
+            name="last_modified_date",
             field=models.DateField(blank=True, null=True),
         ),
     ]

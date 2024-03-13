@@ -1,4 +1,5 @@
 """Views implementation for the Lifecycle Management app."""
+
 import base64
 import io
 import logging
@@ -75,7 +76,7 @@ class SoftwareSoftwareImagesLCMView(generic.ObjectView):
             "softwareimages_table": softwareimages_table,
             "active_tab": "software-images",
         }
-    
+
 
 class RelatedCVEsLCMView(generic.ObjectView):
     """Related CVEs tab for Software view."""
@@ -85,10 +86,9 @@ class RelatedCVEsLCMView(generic.ObjectView):
 
     def get_extra_context(self, request, instance):
         """Adds Relative CVEs table."""
-        relatedcves = (
-            instance.corresponding_cves.annotate(related_cves_count=count_related_m2m(SoftwareLCM, "corresponding_cves"))
-            .restrict(request.user, "view")
-        )
+        relatedcves = instance.corresponding_cves.annotate(
+            related_cves_count=count_related_m2m(SoftwareLCM, "corresponding_cves")
+        ).restrict(request.user, "view")
 
         relatedcves_table = CVELCMTable(data=relatedcves, user=request.user, orderable=False)
 
@@ -102,7 +102,7 @@ class RelatedCVEsLCMView(generic.ObjectView):
             "relatedcves_table": relatedcves_table,
             "active_tab": "related-cves",
         }
-    
+
 
 class ReportOverviewHelper(ContentTypePermissionRequiredMixin, generic.View):
     """Customized overview view for reports aggregation and filterset."""

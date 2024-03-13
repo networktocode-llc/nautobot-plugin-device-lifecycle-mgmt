@@ -495,6 +495,7 @@ def import_db(context, db_name="", input_file="dump.sql"):
     if _is_compose_included(context, "mysql"):
         if not db_name:
             db_name = "$MYSQL_DATABASE"
+        # fmt: off
         command += [
             "mysql --user root --password=$MYSQL_ROOT_PASSWORD",
             '--execute="',
@@ -510,6 +511,7 @@ def import_db(context, db_name="", input_file="dump.sql"):
             "--user=$MYSQL_USER",
             "--password=$MYSQL_PASSWORD",
         ]
+        # fmt: on
     elif _is_compose_included(context, "postgres"):
         if not db_name:
             db_name = "$POSTGRES_DB"
