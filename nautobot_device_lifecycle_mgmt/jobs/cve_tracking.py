@@ -2,8 +2,10 @@
 """Jobs for the CVE Tracking portion of the Device Lifecycle plugin."""
 import os
 from datetime import datetime, date
+from time import sleep
 
 from netutils.platform_mapper import os_platform_object_builder as object_builder
+from netutils.lib_mapper import NIST_LIB_MAPPER_SUPPORTED
 
 from urllib3.util import Retry
 import requests
@@ -117,8 +119,17 @@ class NistCveSyncSoftware(Job):
 
         for software in SoftwareLCM.objects.all():
             manufacturer = str(software.device_platform.manufacturer).lower()
-            platform = str(software.device_platform.name).lower()
-            version = str(software.version)
+            platform = str(software.device_platform.network_driver).lower()
+            version = str(software.version).replace(" ", "")
+
+            if platform in NIST_LIB_MAPPER_SUPPORTED:
+                platform = NIST_LIB_MAPPER_SUPPORTED[platform]
+            else:
+                self.logger.warning(
+                    "OS Platform %s is not yet supported; Skipping." % platform,
+                    extra={"object": software.device_platform, "grouping": "CVE Information"},
+                )
+                continue
 
             cpe_software_search_urls = self.create_cpe_software_search_urls(manufacturer, platform, version)
 
@@ -139,6 +150,9 @@ class NistCveSyncSoftware(Job):
                 if str(cve_info["modified_date"][0:10]) != str(matching_dlc_cve.last_modified_date):
                     self.update_cve(matching_dlc_cve, cve_info)
                     continue
+
+            # API Rest Timer
+            sleep(6)
 
         self.logger.info(
             "Performed discovery on all software. Created %s CVE." % cve_counter, extra={"grouping": "CVE Creation"}
@@ -211,6 +225,7 @@ class NistCveSyncSoftware(Job):
         for cpe_software_search_url in cpe_software_search_urls:
             result = self.query_api(cpe_software_search_url)
 
+            all_cve_info = {"new": {}, "existing": {}}
             if result["totalResults"] > 0:
                 self.logger.info(
                     "Received %s results." % result["totalResults"],
@@ -219,8 +234,7 @@ class NistCveSyncSoftware(Job):
                 cve_list = [cve["cve"] for cve in result["vulnerabilities"]]
                 dlc_cves = [cve.name for cve in CVELCM.objects.all()]
 
-                if cve_list:
-                    all_cve_info = self.process_cves(cve_list, dlc_cves, software_id)
+                all_cve_info = self.process_cves(cve_list, dlc_cves, software_id)
 
         return all_cve_info
 

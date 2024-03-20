@@ -896,6 +896,7 @@ class CVELCMForm(NautobotModelForm):
         fields = [
             "name",
             "published_date",
+            "last_modified_date",
             "link",
             "status",
             "description",

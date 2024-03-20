@@ -21,6 +21,9 @@ from nautobot_device_lifecycle_mgmt.models import (
     VulnerabilityLCM,
 )
 
+# Ignoring 'nb-use-fields-all'
+# pylint: disable=[E4271]
+
 
 class M2MLinkedCountColumn(LinkedCountColumn):
     """Linked count column supporting many-to-many fields."""
@@ -187,31 +190,6 @@ class SoftwareImageLCMTable(BaseTable):
         )
 
 
-class RelatedCVEsLCMTable(BaseTable):
-    """Table for RelatedCVEsLCM."""
-
-    pk = ToggleColumn()
-    name = tables.LinkColumn(
-        "plugins:nautobot_device_lifecycle_mgmt:cvelcm",
-        text=lambda record: record,
-        args=[A("pk")],
-        orderable=False,
-    )
-    actions = ButtonsColumn(CVELCM, buttons=("edit", "delete"))
-
-    class Meta(BaseTable.Meta):
-        """Meta attributes."""
-
-        model = CVELCM
-        fields = (
-            "name",
-            "last_modified_date",
-            "severity",
-            "cvss",
-            "link",
-        )
-
-
 class ValidatedSoftwareLCMTable(BaseTable):
     """Table for ValidatedSoftwareLCMListView."""
 
@@ -293,7 +271,7 @@ class DeviceSoftwareValidationResultTable(BaseTable):
         ]
 
 
-class DeviceSoftwareValidationResultListTable(BaseTable):
+class DeviceSoftwareValidationResultListTable(BaseTable):  # pylint: disable=[E4281]
     """Table for a list of device to software validation report."""
 
     device = tables.Column(accessor="device", verbose_name="Device", linkify=True)
@@ -393,7 +371,7 @@ class InventoryItemSoftwareValidationResultTable(BaseTable):
         ]
 
 
-class InventoryItemSoftwareValidationResultListTable(BaseTable):
+class InventoryItemSoftwareValidationResultListTable(BaseTable):  # pylint: disable=[E4281]
     """Table for a list of intenotry items to software validation report."""
 
     part_id = tables.Column(

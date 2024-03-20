@@ -26,7 +26,7 @@ urlpatterns += [
     ),
     path(
         "software/<uuid:pk>/corresponding_cves/",
-        views.RelatedCVEsLCMView.as_view(),
+        views.SoftwareCVESLCMView.as_view(),
         name="software_corresponding_cves",
     ),
     path(

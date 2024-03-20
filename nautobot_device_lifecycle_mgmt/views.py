@@ -78,8 +78,8 @@ class SoftwareSoftwareImagesLCMView(generic.ObjectView):
         }
 
 
-class RelatedCVEsLCMView(generic.ObjectView):
-    """Related CVEs tab for Software view."""
+class SoftwareCVESLCMView(generic.ObjectView):
+    """Software CVEs tab for Software view."""
 
     queryset = SoftwareLCM.objects.all()
     template_name = "nautobot_device_lifecycle_mgmt/softwarelcm_related_cves.html"

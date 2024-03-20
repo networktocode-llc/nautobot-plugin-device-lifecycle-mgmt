@@ -562,6 +562,7 @@ class CVELCMTestCase(TestCase):
         CVELCM.objects.create(
             name="CVE-2020-27134",
             published_date="2020-12-11",
+            last_modified_date="2020-12-29",
             link="https://www.cvedetails.com/cve/CVE-2020-27134/",
             severity=CVESeverityChoices.CRITICAL,
             status=fixed,
@@ -612,10 +613,10 @@ class CVELCMTestCase(TestCase):
 
     def test_last_modified_date_before(self):
         """Test last_modified_date_before filter."""
-        params = {"last_modified_date_before": "2021-01-01"}
-        self.assertEqual(self.filterset(params, self.queryset).qs.count(), 0)
+        params = {"last_modified_date_before": "2021-02-02"}
+        self.assertEqual(self.filterset(params, self.queryset).qs.count(), 1)
 
-    def test_last_modified_after(self):
+    def test_last_modified_date_after(self):
         """Test last_modified_date_after filter."""
         params = {"last_modified_date_after": "2021-01-01"}
         self.assertEqual(self.filterset(params, self.queryset).qs.count(), 2)
