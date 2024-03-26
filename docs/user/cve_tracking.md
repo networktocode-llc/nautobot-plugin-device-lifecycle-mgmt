@@ -84,13 +84,20 @@ The job output should indicate the softwares checked and the amount of CVEs rece
 
 [^1] Warning: If play button is grayed out. You will need to enable the job by clicking on edit button in the row and navigate to "Job" portion and click on "Enable"
 
+
 ### Additional Notes:
-The device platform name plays part in the success of the lookup.  Please see below for known values outside of an intuitive pattern:
+This module is currently only supporting the following OS Platforms:
 
-| Platform Name | Required Name Value |
-| -- | -- |
-| IOS XE | IOS_XE |
-| IOS XR | IOS_XR |
-| NXOS | NX-OS |
+- Arista EOS
+- Cisco IOS
+- Cisco IOS XR
+- Cisco IOS XE
+- Cisco NXOS
+- Juniper JunOS
 
-If the platform name is not in the above table there may be no need to adjust, however if you do not receive results for a platform, it is likely the name does not show up in NIST as provided.  You may use the [NIST CPE Search Tool]('https://nvd.nist.gov/products/cpe/search') and attempt to find your software and rename the platform as necessary.
+The following OS platforms are in-scope for custom parsers:
+
+- Cisco ASA
+- Cisco Meraki
+
+If the platform you are attempting to gather information from does not work, a custom parser will likely be needed.

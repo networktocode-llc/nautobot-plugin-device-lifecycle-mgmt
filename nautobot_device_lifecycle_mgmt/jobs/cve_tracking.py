@@ -5,7 +5,7 @@ from datetime import datetime, date
 from time import sleep
 
 from netutils.platform_mapper import os_platform_object_builder as object_builder
-from netutils.lib_mapper import NIST_LIB_MAPPER_SUPPORTED
+from netutils.lib_mapper import NIST_LIB_MAPPER_REVERSE
 
 from urllib3.util import Retry
 import requests
@@ -122,9 +122,9 @@ class NistCveSyncSoftware(Job):
             platform = str(software.device_platform.network_driver).lower()
             version = str(software.version).replace(" ", "")
 
-            if platform in NIST_LIB_MAPPER_SUPPORTED:
-                platform = NIST_LIB_MAPPER_SUPPORTED[platform]
-            else:
+            try:
+                platform = NIST_LIB_MAPPER_REVERSE[platform]
+            except KeyError:
                 self.logger.warning(
                     "OS Platform %s is not yet supported; Skipping." % platform,
                     extra={"object": software.device_platform, "grouping": "CVE Information"},
