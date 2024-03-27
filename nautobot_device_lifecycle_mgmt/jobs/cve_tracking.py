@@ -101,7 +101,7 @@ class NistCveSyncSoftware(Job):
         self.nist_api_key = os.getenv("NIST_API_KEY")
         self.sleep_timer = 0.75
         self.headers = {"ContentType": "application/json", "apiKey": self.nist_api_key}
-        self.soft_time_limit = 900
+        self.soft_time_limit = 3600
 
         # Set session attributes for retries
         self.session = Session()
@@ -218,7 +218,7 @@ class NistCveSyncSoftware(Job):
             if created:
                 created_count += 1
 
-        self.logger.info("Created %s CVEs." % created_count, extra={"grouping": "CVE Creation"})
+        self.logger.info("Created New CVEs.", extra={"grouping": "CVE Creation"})
 
     def get_cve_info(self, cpe_software_search_urls: list, software_id=None) -> dict:
         """Search NIST for software and related CVEs."""
