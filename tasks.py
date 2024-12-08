@@ -780,7 +780,8 @@ def ruff(context, action=None, target=None, fix=False, output_format="concise"):
         if not run_command(context, command, warn=True):
             exit_code = 1
 
-    raise Exit(code=exit_code)
+    if exit_code:
+        raise Exit(code=exit_code)
 
 
 @task
